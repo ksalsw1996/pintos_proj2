@@ -4,7 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "threads/synch.h"
+#include "userprog/process.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -88,13 +89,26 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int ori_pri;                        /* Original priority */
+    struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    /* List element for timer */
+    struct list_elem timerelem;
+    /* List for locks to handle multiple lock handling thread */
+    struct list lock_list;
+    /* Lock that holds current thread - for priority donation chain problem */
+    struct lock *holding_lock;
+    /* Wakeup time for thread */
+    int64_t wakeup_time;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
+    /* List for the children process */
+    struct list child_list;
     uint32_t *pagedir;                  /* Page directory. */
+    struct process_info *info;
 #endif
 
     /* Owned by thread.c. */
@@ -125,6 +139,10 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+/* Performs some operation on thread t, given auxiliary data AUX. */
+typedef void thread_action_func (struct thread *t, void *aux);
+void thread_foreach (thread_action_func *, void *);
+
 int thread_get_priority (void);
 void thread_set_priority (int);
 
@@ -133,4 +151,16 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct list *get_sleep_list (void);
+
+bool timer_less_ftn (struct list_elem *a,
+                     struct list_elem *b,
+                     void *aux);
+bool priority_less_ftn(struct list_elem *a,
+                       struct list_elem *b,
+                       void *aux);
+
+bool lock_less_ftn(struct list_elem *a,
+                       struct list_elem *b,
+                       void *aux);
 #endif /* threads/thread.h */
